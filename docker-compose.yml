@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  email-service:
+    build: .
+    container_name: muse-email-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - EMAIL_PROVIDER=mailgun
+      - MAILGUN_USER=${MAILGUN_USER}
+      - MAILGUN_PASSWORD=${MAILGUN_PASSWORD}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - FROM_NAME=${FROM_NAME}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - ADMIN_URL=${ADMIN_URL}
+      - API_KEY=${API_KEY}
+      - LOG_LEVEL=info
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - muse-network
+
+  # Optional: Add a reverse proxy (nginx)
+  nginx:
+    image: nginx:alpine
+    container_name: muse-email-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - email-service
+    restart: unless-stopped
+    networks:
+      - muse-network
+
+networks:
+  muse-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
