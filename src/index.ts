@@ -7,7 +7,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 import { config } from '@/config/environment';
-import { logger } from '@/utils/logger';
+import { logger, addRequestId } from '@/utils/logger';
 import { errorHandler } from '@/middleware/errorHandler';
 import { apiKeyAuth } from '@/middleware/apiKeyAuth';
 import { healthRouter } from '@/routes/health';
@@ -18,6 +18,9 @@ dotenv.config();
 
 const app = express();
 const PORT = config.port;
+
+// Request ID middleware (must be early in the middleware chain)
+app.use(addRequestId);
 
 // Security middleware
 app.use(helmet());
@@ -46,9 +49,36 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Compression
 app.use(compression());
 
-// Logging
-app.use(morgan('combined', {
-  stream: { write: (message: string) => logger.info(message.trim()) }
+// Enhanced HTTP request logging with request ID
+app.use(morgan((tokens: any, req: any, res: any) => {
+  const requestId = req.requestId || 'unknown';
+  const method = tokens['method']?.(req, res);
+  const url = tokens['url']?.(req, res);
+  const status = tokens['status']?.(req, res);
+  const responseTime = tokens['response-time']?.(req, res);
+  const contentLength = tokens['res']?.(req, res, 'content-length');
+  const remoteAddr = tokens['remote-addr']?.(req, res);
+  const userAgent = tokens['user-agent']?.(req, res);
+  
+  const logData = {
+    method: method || 'unknown',
+    url: url || 'unknown',
+    status: status || 'unknown',
+    responseTime: responseTime ? `${responseTime}ms` : 'unknown',
+    contentLength: contentLength || 'unknown',
+    remoteAddr: remoteAddr || 'unknown',
+    userAgent: userAgent || 'unknown',
+    requestId
+  };
+  
+  const statusCode = parseInt(status || '0', 10);
+  const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
+  
+  logger.log(level, 'HTTP request', logData);
+  return '';
+}, {
+  immediate: false,
+  skip: (req: any) => req['url'] === '/health' && config.nodeEnv === 'production' // Skip health checks in production
 }));
 
 // Health check (no auth required)
