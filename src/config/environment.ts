@@ -8,7 +8,7 @@ dotenv.config();
 const envSchema = Joi.object({
   // Server
   PORT: Joi.number().default(3001),
-  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+  NODE_ENV: Joi.string().valid('development', 'staging', 'production', 'test').default('development'),
   API_VERSION: Joi.string().default('v1'),
   
   // Email Provider
